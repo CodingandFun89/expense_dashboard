@@ -15,7 +15,7 @@ try:
     gc = gspread.authorize(creds)
 
     # Open the Google Sheet
-    sheet_name = "Automated_blogging"
+    sheet_name = "expense_tracker"
     try:
         sh = gc.open(sheet_name)
     except gspread.exceptions.SpreadsheetNotFound:

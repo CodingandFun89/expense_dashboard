@@ -27,7 +27,7 @@ This application displays data from a Google Sheet in a Streamlit web interface.
     *   **Important:** Ensure this service account has permission to access the Google Sheet you want to display. You'll need to share the Google Sheet with the service account's email address (found in the JSON credentials file, usually under `client_email`).
 
 6.  **Ensure your Google Sheet is correctly named:**
-    *   The application is configured to open a Google Sheet named "Automated_blogging". If your sheet has a different name, you'll need to update it in `app.py` (variable `sheet_name`).
+    *   The application is configured to open a Google Sheet named "expense_tracker". If your sheet has a different name, you'll need to update it in `app.py` (variable `sheet_name`).
 
 ## Running the Application
 
@@ -44,7 +44,7 @@ Once the dependencies are installed and the credentials file is in place:
 ## Troubleshooting
 
 *   **`Credentials file 'my-expenses-dashboard-8f329af8d5d5.json' not found`**: Make sure your credentials JSON file is correctly named and placed in the root project directory.
-*   **`Spreadsheet named 'Automated_blogging' not found`**:
+*   **`Spreadsheet named 'expense_tracker' not found`**:
     *   Verify the sheet name in `app.py` matches your Google Sheet's name.
     *   Ensure the service account (whose email is in your JSON credentials) has been granted at least "Viewer" access to the Google Sheet. Share the sheet with this email address.
 *   **Other authentication errors**: Double-check that the Google Sheets API and Google Drive API are enabled for your project in the Google Cloud Console.
