@@ -105,20 +105,27 @@ try:
             num_transactions = 0
             avg_expense = 0.0
         else:
-            # Ensure 'Amount in CHF' is numeric after potential coercion
+            # Ensure 'Amount in CHF' is numeric
             df_filtered['Amount in CHF'] = pd.to_numeric(df_filtered['Amount in CHF'], errors='coerce').fillna(0.0)
-            total_expenses = df_filtered['Amount in CHF'].sum()
+            
+            total_income = df_filtered[df_filtered['Amount in CHF'] > 0]['Amount in CHF'].sum()
+            total_expenses = df_filtered[df_filtered['Amount in CHF'] < 0]['Amount in CHF'].sum() # Will be negative or zero
+            net_income_loss = total_income + total_expenses
             num_transactions = len(df_filtered)
-            avg_expense = total_expenses / num_transactions if num_transactions > 0 else 0.0
 
-        col1, col2, col3 = st.columns(3)
+        # --- Update st.metric display ---
+        col1, col2, col3, col4 = st.columns(4) # Use 4 columns
+
         with col1:
-            st.metric(label="Total Expenses", value=f"CHF {total_expenses:,.2f}")
+            st.metric(label="Total Income", value=f"CHF {total_income:,.2f}")
         with col2:
-            st.metric(label="Number of Transactions", value=num_transactions)
+            st.metric(label="Total Expenses", value=f"CHF {total_expenses:,.2f}") # This will show a negative number
         with col3:
-            st.metric(label="Average Expense", value=f"CHF {avg_expense:,.2f}")
-        # --- END KEY METRICS ---
+            st.metric(label="Net Income / Loss", value=f"CHF {net_income_loss:,.2f}")
+        with col4:
+            st.metric(label="Number of Transactions", value=num_transactions)
+        # --- END Update st.metric display ---
+        # --- END KEY METRICS --- # This comment seems to be part of the old structure, might need to adjust if it causes confusion
 
         # --- START VISUALIZATIONS ---
         st.header("Visualizations")
@@ -178,6 +185,47 @@ try:
                 else:
                     st.info("No monthly spending data to display for line chart.")
         # --- END VISUALIZATIONS ---
+
+        # --- START MONTHLY INCOME & LOSS SUMMARY ---
+        st.header("Monthly Income & Loss Summary")
+
+        if df_filtered.empty:
+            st.info("No data available to display monthly summary for the selected date range.")
+        else:
+            df_summary_calc = df_filtered.copy()
+            # Ensure 'Date' is datetime and 'Amount in CHF' is numeric
+            # These should already be handled by earlier data preparation, but re-applying ensures robustness
+            df_summary_calc['Date'] = pd.to_datetime(df_summary_calc['Date'], errors='coerce')
+            df_summary_calc['Amount in CHF'] = pd.to_numeric(df_summary_calc['Amount in CHF'], errors='coerce').fillna(0.0)
+            
+            # Drop rows where Date conversion might have failed, essential for strftime
+            df_summary_calc.dropna(subset=['Date'], inplace=True)
+
+            if df_summary_calc.empty: # Check again after potential dropna
+                st.info("No valid date entries to generate monthly summary.")
+            else:
+                df_summary_calc['Year-Month'] = df_summary_calc['Date'].dt.strftime('%Y-%m')
+                
+                # Group by Year-Month and aggregate
+                monthly_aggregated = df_summary_calc.groupby('Year-Month').agg(
+                    Income=('Amount in CHF', lambda x: x[x > 0].sum()),
+                    Expenses=('Amount in CHF', lambda x: x[x < 0].sum())
+                ).reset_index()
+                
+                monthly_aggregated['Net Income / Loss'] = monthly_aggregated['Income'] + monthly_aggregated['Expenses']
+                
+                # Sort by Year-Month descending
+                summary_table_final = monthly_aggregated.sort_values(by='Year-Month', ascending=False)
+                
+                if summary_table_final.empty:
+                    st.info("No monthly summary data to display.")
+                else:
+                    st.dataframe(summary_table_final.style.format({
+                        'Income': 'CHF {:,.2f}',
+                        'Expenses': 'CHF {:,.2f}',
+                        'Net Income / Loss': 'CHF {:,.2f}'
+                    }), use_container_width=True)
+        # --- END MONTHLY INCOME & LOSS SUMMARY ---
 
         # --- START RAW DATA EXPANDER ---
         with st.expander("Show Raw Data", expanded=False):
