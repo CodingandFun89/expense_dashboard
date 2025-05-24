@@ -246,20 +246,17 @@ try:
 
         # Use the pre-calculated summary_table_final
         if summary_table_final.empty:
-            if df_filtered.empty:
+            if df_filtered.empty: # This condition implies summary_table_final would be empty too
                  st.info("No data available to display monthly summary for the selected date range.")
-            else:
-                 st.info("No valid data to generate monthly summary (e.g., all dates invalid after filtering).")
+            else: # This implies df_filtered was not empty, but summary_table_final is (e.g. no valid dates after processing)
+                 st.info("No valid data to generate monthly summary (e.g., all dates invalid after filtering, or no transactions).")
         else:
-            # summary_table_final is already sorted descending as needed for the table
-            if summary_table_final.empty: # Redundant check, but for safety
-                st.info("No monthly summary data to display.")
-                else:
-                    st.dataframe(summary_table_final.style.format({
-                        'Income': 'CHF {:,.2f}',
-                        'Expenses': 'CHF {:,.2f}',
-                        'Net Income / Loss': 'CHF {:,.2f}'
-                    }), use_container_width=True)
+            # summary_table_final is not empty here, and is already sorted descending.
+            st.dataframe(summary_table_final.style.format({
+                'Income': 'CHF {:,.2f}',
+                'Expenses': 'CHF {:,.2f}',
+                'Net Income / Loss': 'CHF {:,.2f}'
+            }), use_container_width=True)
         # --- END MONTHLY INCOME & LOSS SUMMARY ---
 
         # --- START RAW DATA EXPANDER ---
