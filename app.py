@@ -59,32 +59,71 @@ try:
         # --- START SIDEBAR AND DATE FILTER ---
         st.sidebar.header("Filters")
 
-        # Ensure df['Date'] has valid datetime objects and is not empty
+        today = pd.Timestamp('now').normalize()
+        # Default desired range: last 12 months
+        default_start_for_value = today - pd.DateOffset(months=12)
+        default_end_for_value = today
+
+        # Determine overall min/max bounds for the date pickers based on data
         if df['Date'].dropna().empty:
-            st.sidebar.warning("No valid dates found in data. Using default range (last month).")
-            # Default to today or a fixed range if no data
-            min_date_for_input = pd.Timestamp('now').normalize() - pd.DateOffset(months=1)
-            max_date_for_input = pd.Timestamp('now').normalize()
-            selected_start_date_default = min_date_for_input
-            selected_end_date_default = max_date_for_input
+            st.sidebar.warning("No valid dates found in data. Date pickers will default to last 12 months but allow wider selection.")
+            min_date_for_picker = today - pd.DateOffset(years=2)
+            max_date_for_picker = today
         else:
-            min_date_for_input = df['Date'].min()
-            max_date_for_input = df['Date'].max()
-            selected_start_date_default = min_date_for_input
-            selected_end_date_default = max_date_for_input
-            # Ensure defaults are within the actual min/max of the data to avoid errors if sheet is empty then repopulated
-            if selected_start_date_default < min_date_for_input:
-                 selected_start_date_default = min_date_for_input
-            if selected_end_date_default > max_date_for_input:
-                selected_end_date_default = max_date_for_input
+            min_date_for_picker = df['Date'].min()
+            max_date_for_picker = df['Date'].max()
+            if default_start_for_value < min_date_for_picker:
+                default_start_for_value = min_date_for_picker
+            if default_end_for_value > max_date_for_picker:
+                default_end_for_value = max_date_for_picker
+            if default_start_for_value > default_end_for_value:
+                default_start_for_value = default_end_for_value
 
+        # Initialize session state for dates if they don't exist
+        if 'start_date_ss' not in st.session_state:
+            st.session_state.start_date_ss = default_start_for_value
+        if 'end_date_ss' not in st.session_state:
+            st.session_state.end_date_ss = default_end_for_value
 
-        selected_start_date = st.sidebar.date_input("Start date", selected_start_date_default, min_value=min_date_for_input, max_value=max_date_for_input)
-        selected_end_date = st.sidebar.date_input("End date", selected_end_date_default, min_value=selected_start_date, max_value=max_date_for_input) # min_value for end_date is selected_start_date
+        # Date inputs linked to session state
+        st.sidebar.date_input("Start date", 
+                              value=st.session_state.start_date_ss, 
+                              min_value=min_date_for_picker, 
+                              max_value=max_date_for_picker,
+                              key='start_date_ss')
+        st.sidebar.date_input("End date", 
+                              value=st.session_state.end_date_ss, 
+                              min_value=st.session_state.start_date_ss, 
+                              max_value=max_date_for_picker,
+                              key='end_date_ss')
 
-        # Convert selected dates to Timestamp for comparison, if they are not already
-        selected_start_date = pd.to_datetime(selected_start_date)
-        selected_end_date = pd.to_datetime(selected_end_date)
+        # Quick Filter Buttons
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("Quick Filters")
+        b_col1, b_col2, b_col3 = st.sidebar.columns(3)
+
+        with b_col1:
+            if st.button("YTD", use_container_width=True):
+                st.session_state.start_date_ss = pd.Timestamp(datetime(today.year, 1, 1)).normalize()
+                st.session_state.end_date_ss = today
+                st.experimental_rerun()
+
+        with b_col2:
+            if st.button("Last 3 Months", use_container_width=True):
+                st.session_state.start_date_ss = today - pd.DateOffset(months=3)
+                st.session_state.end_date_ss = today
+                st.experimental_rerun()
+
+        with b_col3:
+            if st.button("Last 6 Months", use_container_width=True):
+                st.session_state.start_date_ss = today - pd.DateOffset(months=6)
+                st.session_state.end_date_ss = today
+                st.experimental_rerun()
+        st.sidebar.markdown("---")
+        
+        # Convert selected dates from session state to Timestamp for filtering
+        selected_start_date = pd.to_datetime(st.session_state.start_date_ss)
+        selected_end_date = pd.to_datetime(st.session_state.end_date_ss)
         # --- END SIDEBAR AND DATE FILTER ---
 
         # --- START DATE FILTERING ---
@@ -184,7 +223,7 @@ try:
                 # Reusing category_spending_expenses from the Pie Chart logic which is:
                 # df_expenses_only_pie.groupby('Category')['Abs Amount'].sum().reset_index()
                 if 'category_spending_expenses' in locals() and not category_spending_expenses.empty:
-                    top_expense_categories_df = category_spending_expenses.nlargest(5, 'Abs Amount')
+                    top_expense_categories_df = category_spending_expenses.nlargest(7, 'Abs Amount') # Changed to 7
                     # Filter out categories with zero sum for bar chart display (already done by Abs Amount > 0 in pie chart's source)
                     # but good to ensure if logic changes:
                     top_expense_categories_for_display = top_expense_categories_df[top_expense_categories_df['Abs Amount'] > 0]
@@ -193,7 +232,7 @@ try:
                          fig_bar_expenses = px.bar(top_expense_categories_for_display, 
                                                  x='Category', 
                                                  y='Abs Amount', # Use the column with absolute sums of expenses
-                                                 title="Top 5 Expense Categories", 
+                                                 title="Top 7 Expense Categories", # New title
                                                  color='Category')
                          fig_bar_expenses.update_layout(yaxis_title="Total Expenses (CHF Absolute)")
                          st.plotly_chart(fig_bar_expenses, use_container_width=True)
