@@ -95,6 +95,25 @@ try:
             df_filtered = df[(df['Date'] >= selected_start_date) & (df['Date'] <= selected_end_date)].copy()
         # --- END DATE FILTERING ---
 
+        # --- PRE-CALCULATE MONTHLY AGGREGATED DATA (for Line Chart & Summary Table) ---
+        summary_table_final = pd.DataFrame() # Initialize as empty
+        if not df_filtered.empty:
+            df_summary_calc = df_filtered.copy()
+            df_summary_calc['Date'] = pd.to_datetime(df_summary_calc['Date'], errors='coerce')
+            df_summary_calc['Amount in CHF'] = pd.to_numeric(df_summary_calc['Amount in CHF'], errors='coerce').fillna(0.0)
+            df_summary_calc.dropna(subset=['Date'], inplace=True)
+
+            if not df_summary_calc.empty:
+                df_summary_calc['Year-Month'] = df_summary_calc['Date'].dt.strftime('%Y-%m')
+                monthly_aggregated = df_summary_calc.groupby('Year-Month').agg(
+                    Income=('Amount in CHF', lambda x: x[x > 0].sum()),
+                    Expenses=('Amount in CHF', lambda x: x[x < 0].sum())
+                ).reset_index()
+                monthly_aggregated['Net Income / Loss'] = monthly_aggregated['Income'] + monthly_aggregated['Expenses']
+                # This is sorted descending for the table, will re-sort for chart
+                summary_table_final = monthly_aggregated.sort_values(by='Year-Month', ascending=False) 
+        # --- END PRE-CALCULATION OF MONTHLY AGGREGATED DATA ---
+
         # Main dashboard title
         st.title("My Personal Expense Dashboard")
 
@@ -191,75 +210,50 @@ try:
                 # --- End Update for Bar Chart ---
 
 
-            # --- Update for Line Chart: Monthly Expenses Over Time ---
-            if 'Date' not in df_filtered.columns: # Should already be checked earlier
-                st.error("Column 'Date' not found. Cannot generate monthly spending chart.")
-            else:
-                # Ensure 'Amount in CHF' is numeric (already done in data prep)
-                # df_filtered['Amount in CHF'] = pd.to_numeric(df_filtered['Amount in CHF'], errors='coerce').fillna(0.0)
+            # --- START Updated Line Chart: Monthly Financial Summary ---
+            if not summary_table_final.empty:
+                chart_data_source = summary_table_final.sort_values(by='Year-Month', ascending=True) # Ensure chronological order
 
-                df_expenses_for_line = df_filtered[df_filtered['Amount in CHF'] < 0].copy()
+                df_melted_for_line = chart_data_source.melt(
+                    id_vars=['Year-Month'], 
+                    value_vars=['Income', 'Expenses', 'Net Income / Loss'], 
+                    var_name='Metric', 
+                    value_name='Amount (CHF)'
+                )
                 
-                if df_expenses_for_line.empty:
-                    st.info("No expense data to display for monthly expenses over time chart.")
-                else:
-                    # Ensure 'Date' is datetime before using .dt accessor
-                    df_expenses_for_line['Date'] = pd.to_datetime(df_expenses_for_line['Date'], errors='coerce')
-                    df_expenses_for_line.dropna(subset=['Date'], inplace=True) # Remove rows if Date conversion failed
-
-                    if df_expenses_for_line.empty: # Check again after dropna
-                        st.info("No valid date entries in expense data for monthly chart.")
-                    else:
-                        df_expenses_for_line['Month'] = df_expenses_for_line['Date'].dt.to_period('M').astype(str) 
-                        monthly_expenses_actual = df_expenses_for_line.groupby('Month')['Amount in CHF'].sum().reset_index()
-                        monthly_expenses_actual = monthly_expenses_actual.sort_values('Month') 
-                        
-                        if not monthly_expenses_actual.empty:
-                            fig_line = px.line(monthly_expenses_actual, 
-                                             x='Month', 
-                                             y='Amount in CHF', # Original negative sums
-                                             title="Monthly Expenses Over Time", 
-                                             markers=True)
-                            fig_line.update_layout(xaxis_title="Month", yaxis_title="Total Expenses (CHF)")
-                            st.plotly_chart(fig_line, use_container_width=True)
-                        else:
-                            st.info("No monthly expense data to display for line chart.")
-            # --- End Update for Line Chart ---
+                if not df_melted_for_line.empty:
+                    fig_financial_summary_line = px.line(
+                        df_melted_for_line,
+                        x='Year-Month',
+                        y='Amount (CHF)',
+                        color='Metric',
+                        title="Monthly Financial Summary",
+                        markers=True
+                    )
+                    fig_financial_summary_line.update_layout(yaxis_title="Amount (CHF)")
+                    st.plotly_chart(fig_financial_summary_line, use_container_width=True)
+                else: # Should not happen if summary_table_final was not empty
+                    st.info("No data available to display monthly financial summary line chart after melting.")
+            elif df_filtered.empty: # This covers the case where df_filtered was empty initially
+                st.info("No data available for the selected date range to generate the monthly financial summary chart.")
+            else: # This covers if df_filtered was not empty, but summary_table_final became empty (e.g., all dates invalid)
+                 st.info("Monthly summary data is not available for the line chart (e.g. no valid date entries).")
+            # --- END Updated Line Chart: Monthly Financial Summary ---
         # --- END VISUALIZATIONS ---
 
         # --- START MONTHLY INCOME & LOSS SUMMARY ---
         st.header("Monthly Income & Loss Summary")
 
-        if df_filtered.empty:
-            st.info("No data available to display monthly summary for the selected date range.")
-        else:
-            df_summary_calc = df_filtered.copy()
-            # Ensure 'Date' is datetime and 'Amount in CHF' is numeric
-            # These should already be handled by earlier data preparation, but re-applying ensures robustness
-            df_summary_calc['Date'] = pd.to_datetime(df_summary_calc['Date'], errors='coerce')
-            df_summary_calc['Amount in CHF'] = pd.to_numeric(df_summary_calc['Amount in CHF'], errors='coerce').fillna(0.0)
-            
-            # Drop rows where Date conversion might have failed, essential for strftime
-            df_summary_calc.dropna(subset=['Date'], inplace=True)
-
-            if df_summary_calc.empty: # Check again after potential dropna
-                st.info("No valid date entries to generate monthly summary.")
+        # Use the pre-calculated summary_table_final
+        if summary_table_final.empty:
+            if df_filtered.empty:
+                 st.info("No data available to display monthly summary for the selected date range.")
             else:
-                df_summary_calc['Year-Month'] = df_summary_calc['Date'].dt.strftime('%Y-%m')
-                
-                # Group by Year-Month and aggregate
-                monthly_aggregated = df_summary_calc.groupby('Year-Month').agg(
-                    Income=('Amount in CHF', lambda x: x[x > 0].sum()),
-                    Expenses=('Amount in CHF', lambda x: x[x < 0].sum())
-                ).reset_index()
-                
-                monthly_aggregated['Net Income / Loss'] = monthly_aggregated['Income'] + monthly_aggregated['Expenses']
-                
-                # Sort by Year-Month descending
-                summary_table_final = monthly_aggregated.sort_values(by='Year-Month', ascending=False)
-                
-                if summary_table_final.empty:
-                    st.info("No monthly summary data to display.")
+                 st.info("No valid data to generate monthly summary (e.g., all dates invalid after filtering).")
+        else:
+            # summary_table_final is already sorted descending as needed for the table
+            if summary_table_final.empty: # Redundant check, but for safety
+                st.info("No monthly summary data to display.")
                 else:
                     st.dataframe(summary_table_final.style.format({
                         'Income': 'CHF {:,.2f}',
