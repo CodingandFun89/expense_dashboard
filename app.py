@@ -101,9 +101,10 @@ try:
         # --- START KEY METRICS ---
         if df_filtered.empty:
             st.warning("No data available for the selected date range to calculate metrics.")
-            total_expenses = 0.0
-            num_transactions = 0
-            avg_expense = 0.0
+            total_income = 0.0
+            total_expenses = 0.0 # Sum of negative numbers, so 0.0 is a neutral starting point
+            net_income_loss = 0.0
+            # num_transactions = 0 # Removed
         else:
             # Ensure 'Amount in CHF' is numeric
             df_filtered['Amount in CHF'] = pd.to_numeric(df_filtered['Amount in CHF'], errors='coerce').fillna(0.0)
@@ -111,10 +112,10 @@ try:
             total_income = df_filtered[df_filtered['Amount in CHF'] > 0]['Amount in CHF'].sum()
             total_expenses = df_filtered[df_filtered['Amount in CHF'] < 0]['Amount in CHF'].sum() # Will be negative or zero
             net_income_loss = total_income + total_expenses
-            num_transactions = len(df_filtered)
+            # num_transactions = len(df_filtered) # Removed
 
         # --- Update st.metric display ---
-        col1, col2, col3, col4 = st.columns(4) # Use 4 columns
+        col1, col2, col3 = st.columns(3) # Changed to 3 columns
 
         with col1:
             st.metric(label="Total Income", value=f"CHF {total_income:,.2f}")
@@ -122,10 +123,9 @@ try:
             st.metric(label="Total Expenses", value=f"CHF {total_expenses:,.2f}") # This will show a negative number
         with col3:
             st.metric(label="Net Income / Loss", value=f"CHF {net_income_loss:,.2f}")
-        with col4:
-            st.metric(label="Number of Transactions", value=num_transactions)
+        # col4 and its st.metric for Number of Transactions removed
         # --- END Update st.metric display ---
-        # --- END KEY METRICS --- # This comment seems to be part of the old structure, might need to adjust if it causes confusion
+        # --- END KEY METRICS --- 
 
         # --- START VISUALIZATIONS ---
         st.header("Visualizations")
@@ -137,53 +137,94 @@ try:
             if 'Category' not in df_filtered.columns:
                 st.error("Column 'Category' not found. Cannot generate category-based charts.")
             else:
-                # Pie Chart: Spending by Category
-                # Ensure 'Amount in CHF' is numeric for calculations
+                # --- Update for Pie Chart: Spending by Category (Expenses Only) ---
+                # Ensure 'Amount in CHF' is numeric (already done in data prep, but good for isolated logic block)
                 df_filtered['Amount in CHF'] = pd.to_numeric(df_filtered['Amount in CHF'], errors='coerce').fillna(0.0)
-                
-                category_spending = df_filtered.groupby('Category')['Amount in CHF'].apply(lambda x: x.abs().sum()).reset_index()
-                # Filter out categories with zero or negative sum for pie chart (abs should make it non-negative, but sum could be zero)
-                category_spending_for_pie = category_spending[category_spending['Amount in CHF'] > 0]
 
-                if not category_spending_for_pie.empty:
-                    fig_pie = px.pie(category_spending_for_pie, names='Category', values='Amount in CHF', title="Spending by Category")
-                    st.plotly_chart(fig_pie, use_container_width=True)
+                df_expenses_only_pie = df_filtered[df_filtered['Amount in CHF'] < 0].copy()
+                if df_expenses_only_pie.empty:
+                    st.info("No expense data to display for pie chart.")
                 else:
-                    st.info("No category spending data to display for pie chart (or total is zero).")
+                    df_expenses_only_pie['Abs Amount'] = df_expenses_only_pie['Amount in CHF'].abs()
+                    category_spending_expenses = df_expenses_only_pie.groupby('Category')['Abs Amount'].sum().reset_index()
+                    
+                    # Filter out categories with zero sum for pie chart
+                    category_spending_for_pie_display = category_spending_expenses[category_spending_expenses['Abs Amount'] > 0]
 
-                # Bar Chart: Top 5 Categories (using category_spending which has absolute sums)
-                if not category_spending.empty: # Use the original category_spending which might include zero sums for ranking
-                    top_categories = category_spending.nlargest(5, 'Amount in CHF')
-                    # Filter out categories with zero or negative sum for bar chart display
-                    top_categories_for_bar = top_categories[top_categories['Amount in CHF'] > 0]
-                    if not top_categories_for_bar.empty:
-                         fig_bar = px.bar(top_categories_for_bar, x='Category', y='Amount in CHF', title="Top 5 Spending Categories", color='Category')
-                         fig_bar.update_layout(yaxis_title="Total Spending (CHF Absolute)")
-                         st.plotly_chart(fig_bar, use_container_width=True)
+                    if not category_spending_for_pie_display.empty:
+                        fig_pie = px.pie(category_spending_for_pie_display, 
+                                         names='Category', 
+                                         values='Abs Amount',  # Use the column with absolute sums
+                                         title="Spending by Category")
+                        st.plotly_chart(fig_pie, use_container_width=True)
                     else:
-                        st.info("No data to display for top categories bar chart (or total is zero).")
-                # else: # This case is implicitly handled if category_spending is empty due to no categories
-                #    st.info("No category data for bar chart.")
+                        st.info("No category spending data (expenses only) to display for pie chart (or total is zero).")
+                # --- End Update for Pie Chart ---
+
+                # --- Update for Bar Chart: Top 5 Expense Categories ---
+                # Reusing category_spending_expenses from the Pie Chart logic which is:
+                # df_expenses_only_pie.groupby('Category')['Abs Amount'].sum().reset_index()
+                if 'category_spending_expenses' in locals() and not category_spending_expenses.empty:
+                    top_expense_categories_df = category_spending_expenses.nlargest(5, 'Abs Amount')
+                    # Filter out categories with zero sum for bar chart display (already done by Abs Amount > 0 in pie chart's source)
+                    # but good to ensure if logic changes:
+                    top_expense_categories_for_display = top_expense_categories_df[top_expense_categories_df['Abs Amount'] > 0]
+
+                    if not top_expense_categories_for_display.empty:
+                         fig_bar_expenses = px.bar(top_expense_categories_for_display, 
+                                                 x='Category', 
+                                                 y='Abs Amount', # Use the column with absolute sums of expenses
+                                                 title="Top 5 Expense Categories", 
+                                                 color='Category')
+                         fig_bar_expenses.update_layout(yaxis_title="Total Expenses (CHF Absolute)")
+                         st.plotly_chart(fig_bar_expenses, use_container_width=True)
+                    else:
+                        # This case would mean that even top 5 categories have 0 or less expense,
+                        # or category_spending_expenses was empty after all.
+                        st.info("No data to display for top expense categories bar chart (or total is zero).")
+                # Check if there were any expenses at all, if category_spending_expenses wasn't defined or was empty
+                # This relies on df_expenses_only_pie being defined in the pie chart section.
+                elif 'df_expenses_only_pie' in locals() and df_expenses_only_pie.empty:
+                     st.info("No expense data to determine top categories (previously checked for pie chart).")
+                else: # Fallback if category_spending_expenses wasn't found or other conditions
+                     st.info("No category spending data available for top expense categories bar chart.")
+                # --- End Update for Bar Chart ---
 
 
-            # Line Chart: Spending Over Time
-            # Ensure 'Date' and 'Amount in CHF' are suitable
-            if 'Date' not in df_filtered.columns:
+            # --- Update for Line Chart: Monthly Expenses Over Time ---
+            if 'Date' not in df_filtered.columns: # Should already be checked earlier
                 st.error("Column 'Date' not found. Cannot generate monthly spending chart.")
             else:
-                df_filtered_for_line = df_filtered.copy()
-                # Ensure 'Amount in CHF' is numeric for sum (already done if category charts ran, but good for standalone)
-                df_filtered_for_line['Amount in CHF'] = pd.to_numeric(df_filtered_for_line['Amount in CHF'], errors='coerce').fillna(0.0)
-                df_filtered_for_line['Month'] = df_filtered_for_line['Date'].dt.to_period('M').astype(str) 
-                monthly_spending = df_filtered_for_line.groupby('Month')['Amount in CHF'].sum().reset_index()
-                monthly_spending = monthly_spending.sort_values('Month') 
+                # Ensure 'Amount in CHF' is numeric (already done in data prep)
+                # df_filtered['Amount in CHF'] = pd.to_numeric(df_filtered['Amount in CHF'], errors='coerce').fillna(0.0)
+
+                df_expenses_for_line = df_filtered[df_filtered['Amount in CHF'] < 0].copy()
                 
-                if not monthly_spending.empty:
-                    fig_line = px.line(monthly_spending, x='Month', y='Amount in CHF', title="Monthly Spending Over Time", markers=True)
-                    fig_line.update_layout(xaxis_title="Month", yaxis_title="Total Expenses (CHF)")
-                    st.plotly_chart(fig_line, use_container_width=True)
+                if df_expenses_for_line.empty:
+                    st.info("No expense data to display for monthly expenses over time chart.")
                 else:
-                    st.info("No monthly spending data to display for line chart.")
+                    # Ensure 'Date' is datetime before using .dt accessor
+                    df_expenses_for_line['Date'] = pd.to_datetime(df_expenses_for_line['Date'], errors='coerce')
+                    df_expenses_for_line.dropna(subset=['Date'], inplace=True) # Remove rows if Date conversion failed
+
+                    if df_expenses_for_line.empty: # Check again after dropna
+                        st.info("No valid date entries in expense data for monthly chart.")
+                    else:
+                        df_expenses_for_line['Month'] = df_expenses_for_line['Date'].dt.to_period('M').astype(str) 
+                        monthly_expenses_actual = df_expenses_for_line.groupby('Month')['Amount in CHF'].sum().reset_index()
+                        monthly_expenses_actual = monthly_expenses_actual.sort_values('Month') 
+                        
+                        if not monthly_expenses_actual.empty:
+                            fig_line = px.line(monthly_expenses_actual, 
+                                             x='Month', 
+                                             y='Amount in CHF', # Original negative sums
+                                             title="Monthly Expenses Over Time", 
+                                             markers=True)
+                            fig_line.update_layout(xaxis_title="Month", yaxis_title="Total Expenses (CHF)")
+                            st.plotly_chart(fig_line, use_container_width=True)
+                        else:
+                            st.info("No monthly expense data to display for line chart.")
+            # --- End Update for Line Chart ---
         # --- END VISUALIZATIONS ---
 
         # --- START MONTHLY INCOME & LOSS SUMMARY ---
