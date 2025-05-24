@@ -60,6 +60,22 @@ try:
         st.sidebar.header("Filters")
 
         today = pd.Timestamp('now').normalize()
+
+        # --- Callback functions for Quick Filters ---
+        # Ensure 'today' is defined before these functions are.
+        def set_ytd_dates_callback():
+            st.session_state.start_date_ss = pd.Timestamp(datetime(today.year, 1, 1)).normalize()
+            st.session_state.end_date_ss = today
+
+        def set_last_3_months_dates_callback():
+            st.session_state.start_date_ss = today - pd.DateOffset(months=3)
+            st.session_state.end_date_ss = today
+
+        def set_last_6_months_dates_callback():
+            st.session_state.start_date_ss = today - pd.DateOffset(months=6)
+            st.session_state.end_date_ss = today
+        # --- End Callback functions ---
+
         # Default desired range: last 12 months
         default_start_for_value = today - pd.DateOffset(months=12)
         default_end_for_value = today
@@ -103,22 +119,13 @@ try:
         b_col1, b_col2, b_col3 = st.sidebar.columns(3)
 
         with b_col1:
-            if st.button("YTD", use_container_width=True):
-                st.session_state.start_date_ss = pd.Timestamp(datetime(today.year, 1, 1)).normalize()
-                st.session_state.end_date_ss = today
-                st.experimental_rerun()
+            st.button("YTD", on_click=set_ytd_dates_callback, use_container_width=True)
 
         with b_col2:
-            if st.button("Last 3 Months", use_container_width=True):
-                st.session_state.start_date_ss = today - pd.DateOffset(months=3)
-                st.session_state.end_date_ss = today
-                st.experimental_rerun()
+            st.button("Last 3 Months", on_click=set_last_3_months_dates_callback, use_container_width=True)
 
         with b_col3:
-            if st.button("Last 6 Months", use_container_width=True):
-                st.session_state.start_date_ss = today - pd.DateOffset(months=6)
-                st.session_state.end_date_ss = today
-                st.experimental_rerun()
+            st.button("Last 6 Months", on_click=set_last_6_months_dates_callback, use_container_width=True)
         st.sidebar.markdown("---")
         
         # Convert selected dates from session state to Timestamp for filtering
