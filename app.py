@@ -10,10 +10,20 @@ import plotly.express as px # Import Plotly Express
 st.set_page_config(page_title="My Expenses Dashboard", layout="wide")
 
 # Google Sheets API authentication
+scopes = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+creds = None # Initialize creds to None
+
 try:
-    creds_file = "my-expenses-dashboard-8f329af8d5d5.json"
-    scopes = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = Credentials.from_service_account_file(creds_file, scopes=scopes)
+    # Check for Streamlit Cloud secrets
+    if "google_credentials" in st.secrets and isinstance(st.secrets["google_credentials"], dict):
+        # st.write("Using credentials from st.secrets") # Optional: for debugging
+        creds = Credentials.from_service_account_info(st.secrets["google_credentials"], scopes=scopes)
+    else:
+        # Fallback to local file if secrets not found or not a dict
+        # st.write("Using credentials from local JSON file") # Optional: for debugging
+        creds_file = "my-expenses-dashboard-8f329af8d5d5.json"
+        creds = Credentials.from_service_account_file(creds_file, scopes=scopes)
+    
     gc = gspread.authorize(creds)
 
     # Open the Google Sheet
