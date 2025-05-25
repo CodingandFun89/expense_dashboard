@@ -11,42 +11,63 @@ st.set_page_config(page_title="My Expenses Dashboard", layout="wide")
 
 # Google Sheets API authentication
 scopes = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = None # Initialize creds to None
+creds = None
+using_secrets = False # Flag to track if secrets were used
+# Define creds_file path at a higher scope
+creds_file_path = "my-expenses-dashboard-8f329af8d5d5.json"
+sheet_name = "expense_tracker" # Define sheet_name here or ensure it's globally available
 
 try:
-    # Check for Streamlit Cloud secrets
+    # Attempt to load credentials from Streamlit Secrets first
     if "google_credentials" in st.secrets and isinstance(st.secrets["google_credentials"], dict):
-        # st.write("Using credentials from st.secrets") # Optional: for debugging
+        # st.write("Attempting to use credentials from st.secrets") # Optional debug
         creds = Credentials.from_service_account_info(st.secrets["google_credentials"], scopes=scopes)
-    else:
-        # Fallback to local file if secrets not found or not a dict
-        # st.write("Using credentials from local JSON file") # Optional: for debugging
-        creds_file = "my-expenses-dashboard-8f329af8d5d5.json"
-        creds = Credentials.from_service_account_file(creds_file, scopes=scopes)
-    
-    gc = gspread.authorize(creds)
+        using_secrets = True
+        # st.write("Successfully used credentials from st.secrets") # Optional debug
+    # No specific error for "google_credentials" key not being a dict, covered by 'if not creds' later
+except st.errors.StreamlitAPIException as e: 
+    # Catch errors specifically from st.secrets access if it's not just a missing key but API issue
+    st.warning(f"Streamlit secrets API error: {e}. Falling back to local file.")
+except Exception as e: # Catch any other unexpected error during secrets processing
+    st.warning(f"Unexpected error processing st.secrets: {e}. Falling back to local file.")
 
-    # Open the Google Sheet
-    sheet_name = "expense_tracker"
+
+# If credentials were not loaded from secrets, try the local file
+if not creds:
+    # st.write(f"Attempting to use credentials from local file: {creds_file_path}") # Optional debug
     try:
-        sh = gc.open(sheet_name)
-    except gspread.exceptions.SpreadsheetNotFound:
-        st.error(f"Spreadsheet named '{sheet_name}' not found. Please check the name and ensure the service account has access.")
+        creds = Credentials.from_service_account_file(creds_file_path, scopes=scopes)
+        # st.write("Successfully used credentials from local file") # Optional debug
+    except FileNotFoundError:
+        st.error(f"Credentials file '{creds_file_path}' not found, and Streamlit secrets are not configured or missing 'google_credentials'.")
+        st.info("Please provide credentials: either configure `google_credentials` in Streamlit Cloud secrets (recommended) or place the JSON file at the project root.")
+        st.stop()
+    except Exception as e: # Catch other errors during local file loading (e.g., malformed JSON)
+        st.error(f"Error loading credentials from local file '{creds_file_path}': {e}")
         st.stop()
 
-    # Read data from the first worksheet
-    try:
-        worksheet = sh.sheet1 # Or use sh.worksheet("SheetName") if you know the name
-        data = worksheet.get_all_records() # Gets all data as a list of dictionaries
-        
-        if not data:
-            st.warning("The first worksheet is empty or contains no data.")
-            st.stop()
+# If after all attempts, creds are still None (should ideally be caught by specific errors above)
+if not creds:
+    st.error("Fatal: Could not load Google Sheets credentials from any source. Application cannot proceed.")
+    st.stop()
 
-        df = pd.DataFrame(data)
+# Authorize gspread and open sheet (this part can be in its own try-except for gspread specific errors)
+try:
+    gc = gspread.authorize(creds)
+    sh = gc.open(sheet_name) # Use the defined sheet_name
 
-        # --- START DATA PREPARATION ---
-        if 'Date' in df.columns:
+    # Read data from the first worksheet (moved from the outer try-except)
+    worksheet = sh.sheet1 
+    data = worksheet.get_all_records() 
+    
+    if not data:
+        st.warning("The first worksheet is empty or contains no data.")
+        st.stop()
+
+    df = pd.DataFrame(data)
+
+    # --- START DATA PREPARATION --- (This remains part of the main application flow after successful data loading)
+    if 'Date' in df.columns:
             df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
         else:
             st.error("Column 'Date' not found in the Google Sheet. Please ensure it exists.")
@@ -415,9 +436,25 @@ try:
 
 
 except FileNotFoundError:
-    st.error(f"Credentials file '{creds_file}' not found. Make sure it's in the same directory as app.py.")
-    st.info("Please upload your Google Service Account credentials JSON file and name it 'my-expenses-dashboard-8f329af8d5d5.json'.")
+# The main application logic continues from here, using 'df'.
+# The specific FileNotFoundError and general Exception for the initial credential loading have been handled above.
+# Now, handle gspread specific errors for gc.open and worksheet operations.
+except gspread.exceptions.SpreadsheetNotFound:
+    st.error(f"Spreadsheet named '{sheet_name}' not found. Please check the name and ensure the service account has access.")
     st.stop()
-except Exception as e:
-    st.error(f"An error occurred during Google Sheets authentication or setup: {e}")
+except gspread.exceptions.APIError as e:
+    err_detail = e.response.json().get('error', {}).get('message', str(e))
+    if using_secrets:
+        st.error(f"Google Sheets API error using st.secrets: {err_detail}")
+    else:
+        st.error(f"Google Sheets API error using local file '{creds_file_path}': {err_detail}")
+    st.info("Ensure the service account has permissions for Google Sheets and the Drive API, and that the Google Sheets API is enabled in your Google Cloud project.")
     st.stop()
+except Exception as e: # Catch-all for other gspread or sheet processing issues
+    st.error(f"An error occurred while accessing Google Sheets: {e}")
+    st.stop()
+
+# Ensure the rest of the app's original main try-except structure (if any) is maintained
+# For this task, the refactoring focuses on the credential and gspread.authorize/open part.
+# The data processing and Streamlit element creation logic (df_filtered, metrics, charts)
+# should follow this successfully loaded 'df'.
