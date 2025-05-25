@@ -287,6 +287,95 @@ try:
             # --- END Updated Line Chart: Monthly Financial Summary ---
         # --- END VISUALIZATIONS ---
 
+        # --- START MONTHLY TRENDS FOR TOP SPENDING CATEGORIES ---
+        st.header("Monthly Trends for Top Spending Categories")
+
+        if df_filtered.empty:
+            st.info("No data available in the selected period to generate monthly trends for top spending categories.")
+        elif 'Category' not in df_filtered.columns or 'Amount in CHF' not in df_filtered.columns:
+            st.warning("Required columns ('Category' or 'Amount in CHF') are missing for this chart.")
+        else:
+            df_expenses = df_filtered[df_filtered['Amount in CHF'] < 0].copy()
+            if df_expenses.empty:
+                st.info("No expense data in the selected period for this chart.")
+            else:
+                df_expenses['Abs Amount'] = df_expenses['Amount in CHF'].abs()
+                top_categories_overall_spending = df_expenses.groupby('Category')['Abs Amount'].sum().nlargest(5).index.tolist()
+
+                if len(top_categories_overall_spending) == 0:
+                    st.info("Not enough category expense data to determine top 5 categories.")
+                else:
+                    df_top_category_expenses = df_expenses[df_expenses['Category'].isin(top_categories_overall_spending)].copy() # Use .copy()
+                    
+                    # Ensure 'Date' column is datetime and handle NaT
+                    df_top_category_expenses['Date'] = pd.to_datetime(df_top_category_expenses['Date'], errors='coerce')
+                    df_top_category_expenses.dropna(subset=['Date'], inplace=True)
+
+                    if df_top_category_expenses.empty:
+                        st.info("No valid date entries for top category expenses after filtering.")
+                    else:
+                        df_top_category_expenses['Year-Month'] = df_top_category_expenses['Date'].dt.strftime('%Y-%m')
+                        monthly_top_category_trends = df_top_category_expenses.groupby(['Year-Month', 'Category'])['Amount in CHF'].sum().reset_index()
+                        monthly_top_category_trends = monthly_top_category_trends.sort_values(by=['Year-Month', 'Category'])
+
+                        if monthly_top_category_trends.empty:
+                            st.info("No monthly trend data to display for top categories.")
+                        else:
+                            fig_top_cat_trends = px.line(
+                                monthly_top_category_trends,
+                                x='Year-Month',
+                                y='Amount in CHF', # These are the negative sums
+                                color='Category',
+                                title="Monthly Expenses: Top 5 Categories",
+                                markers=True
+                            )
+                            fig_top_cat_trends.update_layout(yaxis_title="Total Expenses (CHF)")
+                            st.plotly_chart(fig_top_cat_trends, use_container_width=True)
+        # --- END MONTHLY TRENDS FOR TOP SPENDING CATEGORIES ---
+
+        # --- START RECENT ACTIVITY: SPENDING IN LAST 10 DAYS ---
+        st.header("Recent Activity: Spending in Last 10 Days")
+
+        today_for_recent = pd.Timestamp('now').normalize()
+        ten_days_ago = today_for_recent - pd.DateOffset(days=9) # Inclusive of today
+
+        # Use a copy of the original df for this section to avoid conflicts with df_filtered
+        df_recent = df.copy() 
+        # Ensure correct data types - this should ideally be handled at initial df load,
+        # but re-applying here makes this section self-contained and robust.
+        df_recent['Date'] = pd.to_datetime(df_recent['Date'], errors='coerce')
+        df_recent['Amount in CHF'] = pd.to_numeric(df_recent['Amount in CHF'], errors='coerce').fillna(0.0)
+        df_recent.dropna(subset=['Date'], inplace=True) # Remove rows where date conversion failed
+
+        recent_expenses = df_recent[
+            (df_recent['Date'] >= ten_days_ago) & 
+            (df_recent['Date'] <= today_for_recent) & 
+            (df_recent['Amount in CHF'] < 0)
+        ].copy()
+
+        if recent_expenses.empty:
+            st.info("No expense transactions recorded in the last 10 days.")
+        else:
+            if 'Category' not in recent_expenses.columns:
+                 st.warning("Column 'Category' is missing, cannot display recent spending by category.")
+            else:
+                recent_expenses['Abs Amount'] = recent_expenses['Amount in CHF'].abs()
+                spending_last_10_days = recent_expenses.groupby('Category')['Abs Amount'].sum().reset_index()
+                spending_last_10_days = spending_last_10_days[spending_last_10_days['Abs Amount'] > 0]
+
+                if spending_last_10_days.empty:
+                    st.info("No category spending to display for the last 10 days.")
+                else:
+                    fig_recent_spending = px.bar(
+                        spending_last_10_days,
+                        x='Category',
+                        y='Abs Amount',
+                        title="Spending by Category (Last 10 Days)"
+                    )
+                    fig_recent_spending.update_layout(yaxis_title="Total Spending (CHF Absolute)")
+                    st.plotly_chart(fig_recent_spending, use_container_width=True)
+        # --- END RECENT ACTIVITY: SPENDING IN LAST 10 DAYS ---
+
         # --- START MONTHLY INCOME & LOSS SUMMARY ---
         st.header("Monthly Income & Loss Summary")
 
