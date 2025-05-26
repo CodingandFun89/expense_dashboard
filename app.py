@@ -16,6 +16,24 @@ using_secrets = False # Flag to track if secrets were used
 creds_file_path = "my-expenses-dashboard-8f329af8d5d5.json"
 sheet_name = "expense_tracker"
 
+st.write("--- Start Debugging Secrets ---")
+try:
+    st.write("st.secrets available:", hasattr(st, 'secrets'))
+    if hasattr(st, 'secrets'):
+        st.write("st.secrets keys:", st.secrets.keys())
+        if "google_credentials" in st.secrets:
+            st.write("'google_credentials' key found.")
+            st.write("Type of st.secrets['google_credentials']:", type(st.secrets["google_credentials"]))
+        else:
+            st.write("'google_credentials' key NOT found.")
+except Exception as e:
+    st.write(f"An error occurred while inspecting st.secrets: {e}")
+st.write("--- End Debugging Secrets ---")
+
+# --- START CREDENTIALS HANDLING --- # << This line should be AFTER your pasted code.
+scopes = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+creds = None
+
 try:
     # Attempt to load credentials from Streamlit Secrets first
     if "google_credentials" in st.secrets and isinstance(st.secrets["google_credentials"], dict):
