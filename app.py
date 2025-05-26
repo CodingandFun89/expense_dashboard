@@ -68,16 +68,16 @@ try:
 
     # --- START DATA PREPARATION --- (This remains part of the main application flow after successful data loading)
     if 'Date' in df.columns:
-            df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-        else:
-            st.error("Column 'Date' not found in the Google Sheet. Please ensure it exists.")
-            st.stop()
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+    else:
+        st.error("Column 'Date' not found in the Google Sheet. Please ensure it exists.")
+        st.stop()
 
-        if 'Amount in CHF' in df.columns:
-            df['Amount in CHF'] = pd.to_numeric(df['Amount in CHF'], errors='coerce')
-        else:
-            st.error("Column 'Amount in CHF' not found in the Google Sheet. Please ensure it exists.")
-            st.stop()
+    if 'Amount in CHF' in df.columns:
+        df['Amount in CHF'] = pd.to_numeric(df['Amount in CHF'], errors='coerce')
+    else:
+        st.error("Column 'Amount in CHF' not found in the Google Sheet. Please ensure it exists.")
+        st.stop()
         
         # Optional: Handle rows with conversion errors if necessary
         # For example, drop rows where critical conversions failed:
