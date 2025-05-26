@@ -36,7 +36,7 @@ creds = None
 
 try:
     # Attempt to load credentials from Streamlit Secrets first
-    if "google_credentials" in st.secrets and isinstance(st.secrets["google_credentials"], dict):
+    if "google_credentials" in st.secrets:
         creds = Credentials.from_service_account_info(st.secrets["google_credentials"], scopes=scopes)
         using_secrets = True
 except st.errors.StreamlitAPIException as e: 
