@@ -16,19 +16,6 @@ using_secrets = False # Flag to track if secrets were used
 creds_file_path = "my-expenses-dashboard-8f329af8d5d5.json"
 sheet_name = "expense_tracker"
 
-st.write("--- Start Debugging Secrets ---")
-try:
-    st.write("st.secrets available:", hasattr(st, 'secrets'))
-    if hasattr(st, 'secrets'):
-        st.write("st.secrets keys:", st.secrets.keys())
-        if "google_credentials" in st.secrets:
-            st.write("'google_credentials' key found.")
-            st.write("Type of st.secrets['google_credentials']:", type(st.secrets["google_credentials"]))
-        else:
-            st.write("'google_credentials' key NOT found.")
-except Exception as e:
-    st.write(f"An error occurred while inspecting st.secrets: {e}")
-st.write("--- End Debugging Secrets ---")
 
 # --- START CREDENTIALS HANDLING --- # << This line should be AFTER your pasted code.
 scopes = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -132,12 +119,10 @@ try:
         st.session_state.end_date_ss = default_end_for_value
 
     st.sidebar.date_input("Start date", 
-                          value=st.session_state.start_date_ss, 
                           min_value=min_date_for_picker, 
                           max_value=max_date_for_picker,
                           key='start_date_ss')
     st.sidebar.date_input("End date", 
-                          value=st.session_state.end_date_ss, 
                           min_value=st.session_state.start_date_ss, 
                           max_value=max_date_for_picker,
                           key='end_date_ss')
